@@ -1,0 +1,601 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enhanced User model for adult dating platform
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  emailVerified DateTime? @map("email_verified")
+  
+  // Required for age verification (18+ only)
+  birthDate     DateTime  // Required for age verification
+  ageVerified   Boolean   @default(false)
+  
+  // Profile verification
+  isVerified    Boolean   @default(false) // Photo verification
+  image         String?
+  
+  // Account status
+  lastActive    DateTime?
+  suspended     Boolean   @default(false)
+  suspendedReason String?
+  accountLocked Boolean   @default(false) // Emergency lock
+  lockReason    String?   // Reason for lock
+  lockedAt      DateTime? // When locked
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  profile       Profile?
+  verification  Verification?
+  safetyProfile SafetyProfile?
+  intentions    Intention[]
+  photos        Photo[]
+  
+  // Matching relations
+  likesGiven    Like[]    @relation("LikesGiven")
+  likesReceived Like[]    @relation("LikesReceived")
+  passesGiven   Pass[]    @relation("PassesGiven")
+  passesReceived Pass[]   @relation("PassesReceived")
+  superLikesGiven SuperLike[] @relation("SuperLikesGiven")
+  superLikesReceived SuperLike[] @relation("SuperLikesReceived")
+  
+  // Matches
+  matchesAsUserOne Match[] @relation("MatchUserOne")
+  matchesAsUserTwo Match[] @relation("MatchUserTwo")
+  
+  // Safety
+  blocksGiven   Block[]   @relation("BlocksGiven")
+  blocksReceived Block[]  @relation("BlocksReceived")
+  reportsGiven  Report[]  @relation("ReportsGiven")
+  reportsReceived Report[] @relation("ReportsReceived")
+  emergencyIncidents EmergencyIncident[]
+  
+  // Notifications
+  notifications Notification[]
+  
+  // Subscription
+  subscription  Subscription?
+  
+  // Indexes for performance
+  @@index([lastActive, ageVerified], name: "idx_user_active_verified")
+  @@index([isVerified, ageVerified], name: "idx_user_verification_status")
+  @@index([suspended, createdAt], name: "idx_user_suspended")
+  @@index([accountLocked, lockedAt], name: "idx_user_locked")
+  @@map("users")
+}
+
+// Profile information with adult-specific fields
+model Profile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  bio           String?
+  location      String?  // Encrypted for privacy
+  
+  // What user is looking for
+  lookingFor    String[] // Multiple selections
+  
+  // Adult-specific preferences
+  kinks         String[] // Tagged interests
+  boundaries    String[] // Hard limits (things they won't do)
+  dealBreakers  String[] // Auto-filter these out
+  
+  // Privacy settings
+  discreetMode  Boolean  @default(false) // Hide from contacts/social
+  hideFromContacts Boolean @default(false)
+  shareLocation Boolean  @default(false)
+  
+  // Preference settings
+  ageRangeMin   Int      @default(18)
+  ageRangeMax   Int      @default(99)
+  maxDistance   Int      @default(25) // Miles
+  interestedIn  String[] // Gender preferences
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Indexes for location-based queries (when location search is implemented)
+  @@index([maxDistance, ageRangeMin, ageRangeMax], name: "idx_profile_matching")
+  @@map("profiles")
+}
+
+// User intentions (tonight, this week, ongoing, etc.)
+model Intention {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type        String    // "tonight", "this_week", "ongoing_fwb", "one_time"
+  visibility  String    @default("everyone") // "everyone", "matches_only", "specific_users"
+  expiresAt   DateTime? // Auto-expire "tonight" intentions
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Indexes for intention matching
+  @@index([type, expiresAt], name: "idx_intention_type_expiry")
+  @@index([userId, type], name: "idx_intention_user_type")
+  @@map("intentions")
+}
+
+// Verification system
+model Verification {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Verification levels
+  idVerified        Boolean   @default(false)
+  photoVerified     Boolean   @default(false)
+  backgroundCheck   Boolean   @default(false)
+  
+  // Verification details
+  verificationMethod String?  // "photo", "video", "id_document"
+  ageVerificationPhoto String? // URL to stored ID photo (age only)
+  verifiedAt        DateTime?
+  expiresAt         DateTime? // Re-verification required
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Indexes for verification queries
+  @@index([photoVerified, idVerified, backgroundCheck], name: "idx_verification_status")
+  @@index([verifiedAt, expiresAt], name: "idx_verification_timing")
+  @@map("verifications")
+}
+
+// Safety profile for emergency features
+model SafetyProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Emergency contacts (encrypted)
+  emergencyContacts Json?    // Array of encrypted contact info
+  
+  // Health status (optional, private)
+  stiStatus         Json?    // {status: "negative", testedAt: Date}
+  
+  // Safety features
+  safeWord          String?  // Triggers emergency protocol
+  trustedFriends    String[] // User IDs for location sharing
+  shareLocationUntil DateTime? // Temporary location sharing
+  
+  // Safety preferences
+  requireVideoVerify Boolean @default(false)
+  publicMeetupOnly   Boolean @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("safety_profiles")
+}
+
+// Photo management with privacy controls
+model Photo {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  url         String
+  blurredUrl  String?  // Blurred version for pre-match viewing
+  isPrimary   Boolean  @default(false)
+  isVerified  Boolean  @default(false) // Used for verification
+  isPublic    Boolean  @default(true)  // False for private album
+  
+  uploadedAt  DateTime @default(now())
+  verifiedAt  DateTime?
+  
+  // Indexes for photo queries
+  @@index([userId, isPrimary], name: "idx_photo_user_primary")
+  @@index([isPublic, isVerified], name: "idx_photo_visibility")
+  @@map("photos")
+}
+
+// Matching system
+model Match {
+  id              String    @id @default(cuid())
+  userOneId       String
+  userTwoId       String
+  userOne         User      @relation("MatchUserOne", fields: [userOneId], references: [id], onDelete: Cascade)
+  userTwo         User      @relation("MatchUserTwo", fields: [userTwoId], references: [id], onDelete: Cascade)
+  
+  matchedAt       DateTime  @default(now())
+  lastInteraction DateTime?
+  
+  // Meetup planning
+  meetupPlanned   Boolean   @default(false)
+  meetupTime      DateTime?
+  consentConfirmed Boolean  @default(false) // Both users confirmed
+  
+  // Relations
+  encounters      Encounter[]
+  messages        Message[]
+  
+  @@unique([userOneId, userTwoId])
+  @@index([matchedAt, consentConfirmed], name: "idx_match_timing_consent")
+  @@index([lastInteraction, meetupPlanned], name: "idx_match_activity")
+  @@map("matches")
+}
+
+// Encounter planning and tracking
+model Encounter {
+  id            String   @id @default(cuid())
+  matchId       String
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  
+  scheduledFor  DateTime?
+  location      String?  // Encrypted location
+  
+  // Safety features
+  safeArrival   Boolean  @default(false)
+  checkInTime   DateTime?
+  
+  // Consent tracking
+  userOneConsent Boolean @default(false)
+  userTwoConsent Boolean @default(false)
+  
+  // Post-encounter
+  rating        Json?    // Private ratings: safety, respect, chemistry
+  completed     Boolean  @default(false)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Indexes for encounter safety and scheduling
+  @@index([scheduledFor, completed], name: "idx_encounter_schedule")
+  @@index([safeArrival, checkInTime], name: "idx_encounter_safety")
+  @@map("encounters")
+}
+
+// Message system
+model Message {
+  id        String   @id @default(cuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  
+  senderId  String
+  content   String
+  messageType String @default("text") // "text", "photo", "location", "consent_request"
+  
+  // Privacy features
+  expiresAt DateTime? // Disappearing messages
+  readAt    DateTime?
+  
+  createdAt DateTime @default(now())
+  
+  @@map("messages")
+}
+
+// Interaction tracking
+model Like {
+  id        String   @id @default(cuid())
+  giverId   String
+  receiverId String
+  giver     User     @relation("LikesGiven", fields: [giverId], references: [id], onDelete: Cascade)
+  receiver  User     @relation("LikesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([giverId, receiverId])
+  @@index([createdAt, giverId], name: "idx_like_timing")
+  @@map("likes")
+}
+
+model Pass {
+  id        String   @id @default(cuid())
+  giverId   String
+  receiverId String
+  giver     User     @relation("PassesGiven", fields: [giverId], references: [id], onDelete: Cascade)
+  receiver  User     @relation("PassesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([giverId, receiverId])
+  @@index([createdAt, giverId], name: "idx_pass_timing")
+  @@map("passes")
+}
+
+model SuperLike {
+  id        String   @id @default(cuid())
+  giverId   String
+  receiverId String
+  giver     User     @relation("SuperLikesGiven", fields: [giverId], references: [id], onDelete: Cascade)
+  receiver  User     @relation("SuperLikesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([giverId, receiverId])
+  @@index([createdAt, giverId], name: "idx_superlike_timing")
+  @@map("super_likes")
+}
+
+// Safety systems
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  blocker   User     @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+  
+  reason    String?
+  createdAt DateTime @default(now())
+  
+  @@unique([blockerId, blockedId])
+  @@map("blocks")
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reportedId  String
+  reporter    User     @relation("ReportsGiven", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported    User     @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Cascade)
+  
+  reason      String
+  description String?
+  severity    String   @default("medium") // "low", "medium", "high", "critical"
+  
+  // Admin review
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  actionTaken String?
+  
+  createdAt   DateTime @default(now())
+  
+  // Indexes for safety reporting
+  @@index([severity, createdAt], name: "idx_report_severity")
+  @@index([reviewedAt, actionTaken], name: "idx_report_review_status")
+  @@map("reports")
+}
+
+// NextAuth.js models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
+
+// Emergency system models
+model EmergencyIncident {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type       String   // "panic_button", "safe_word", "check_in_missed", "manual_report"
+  location   String?  // JSON encoded location data
+  timestamp  DateTime @default(now())
+  silent     Boolean  @default(false)
+  resolved   Boolean  @default(false)
+  resolvedAt DateTime?
+  resolvedBy String?
+  
+  // Relations
+  communications EmergencyCommunication[]
+  logs          EmergencyLog[]
+  
+  @@index([timestamp, resolved], name: "idx_emergency_incident_status")
+  @@index([userId, type], name: "idx_emergency_user_type")
+  @@map("emergency_incidents")
+}
+
+model EmergencyCommunication {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   EmergencyIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  
+  type       String   // "sms", "push", "email", "in_app"
+  recipient  String   // Phone number, email, or user ID
+  content    String
+  sent       Boolean  @default(false)
+  sentAt     DateTime?
+  
+  @@index([incidentId, sent], name: "idx_emergency_comm_status")
+  @@map("emergency_communications")
+}
+
+model EmergencyLog {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   EmergencyIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  
+  actions    String   // JSON array of actions taken
+  timestamp  DateTime @default(now())
+  
+  @@map("emergency_logs")
+}
+
+model SupportNotification {
+  id         String   @id @default(cuid())
+  incidentId String
+  priority   String   // "low_priority", "medium_priority", "high_priority", "critical"
+  type       String   // Incident type
+  notifiedAt DateTime @default(now())
+  
+  @@index([priority, notifiedAt], name: "idx_support_notification_priority")
+  @@map("support_notifications")
+}
+
+model Notification {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type     String   // "safety_alert", "match", "message", "system"
+  title    String
+  content  String
+  urgent   Boolean  @default(false)
+  read     Boolean  @default(false)
+  metadata String?  // JSON for additional data
+  
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+  
+  @@index([userId, urgent, read], name: "idx_notification_user_priority")
+  @@map("notifications")
+}
+
+model EvidenceSnapshot {
+  id         String   @id @default(cuid())
+  incidentId String
+  userId     String
+  timestamp  DateTime @default(now())
+  data       String   // JSON snapshot of relevant data
+  
+  @@index([incidentId, timestamp], name: "idx_evidence_incident")
+  @@map("evidence_snapshots")
+}
+
+model LawEnforcementData {
+  id           String   @id @default(cuid())
+  incidentId   String   @unique
+  prepared     Boolean  @default(false)
+  preparedAt   DateTime @default(now())
+  jurisdiction String   // Based on location
+  accessed     Boolean  @default(false)
+  accessedBy   String?
+  accessedAt   DateTime?
+  
+  @@map("law_enforcement_data")
+}
+
+model SystemError {
+  id        String   @id @default(cuid())
+  type      String   // "emergency_alert_failure", etc.
+  error     String
+  metadata  String?  // JSON
+  timestamp DateTime @default(now())
+  
+  @@index([type, timestamp], name: "idx_system_error_type")
+  @@map("system_errors")
+}
+
+// Risk assessment models
+model RiskAssessment {
+  id             String   @id @default(cuid())
+  userId         String
+  riskScore      Int      // 0-100
+  riskLevel      String   // "low", "medium", "high", "critical"
+  factors        String   // JSON of risk factors
+  recommendations String  // JSON array of recommendations
+  assessedAt     DateTime @default(now())
+  
+  @@index([userId, assessedAt], name: "idx_risk_assessment_user")
+  @@index([riskLevel, riskScore], name: "idx_risk_assessment_level")
+  @@map("risk_assessments")
+}
+
+model UserMonitoring {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  monitoringLevel  String   // "low", "medium", "high"
+  reason           String
+  startedAt        DateTime @default(now())
+  endedAt          DateTime?
+  
+  @@map("user_monitoring")
+}
+
+// Performance indexes for ProxiMeet
+// Location-based queries
+// @@index([location, lastActive]) on Profile when location queries are implemented
+
+// Active users index
+// @@index([lastActive, ageVerified]) on User
+
+// Verification status indexes  
+// @@index([isVerified, ageVerified]) on User
+// @@index([photoVerified, idVerified]) on Verification
+
+// Safety features indexes
+// @@index([suspended, createdAt]) on User  
+// @@index([severity, createdAt]) on Report
+// @@index([matchedAt, consentConfirmed]) on Match
+// @@index([scheduledFor, completed]) on Encounter
+
+// Interaction indexes for matching algorithm
+// @@index([createdAt, giverId]) on Like, Pass, SuperLike
+// @@index([type, expiresAt]) on Intention
+
+// Subscription and monetization
+model Subscription {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Stripe integration
+  stripeCustomerId      String?   @unique
+  stripeSubscriptionId  String?   @unique
+  stripePriceId         String?
+  
+  // Subscription details
+  tier                  String    // "premium", "premiumPlus"
+  status                String    // "active", "canceled", "past_due", "incomplete"
+  
+  // Billing
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean   @default(false)
+  canceledAt            DateTime?
+  
+  // Features tracking
+  dailySwipesUsed       Int       @default(0)
+  weeklyBoostsUsed      Int       @default(0)
+  monthlyVideoCallsUsed Int       @default(0)
+  lastResetDate         DateTime  @default(now())
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  @@index([tier, status], name: "idx_subscription_tier_status")
+  @@index([currentPeriodEnd, cancelAtPeriodEnd], name: "idx_subscription_billing")
+  @@map("subscriptions")
+}

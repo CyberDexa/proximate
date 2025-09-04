@@ -1,26 +1,182 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  /* ProxiMeet specific colors */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-available: var(--available);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Light mode colors (optional fallback) */
+.light {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.545 0.15 264.052); /* Deep purple */
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.645 0.243 264.376); /* Electric blue */
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  
+  /* ProxiMeet specific colors */
+  --success: oklch(0.615 0.151 164.035); /* Emerald for safety */
+  --warning: oklch(0.794 0.151 85.595); /* Amber for caution */
+  --available: oklch(0.694 0.164 142.495); /* Green for available now */
+  
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.545 0.15 264.052);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Dark mode as default (no class needed) */
+:root {
+  --radius: 0.625rem;
+  /* Dark colors - ProxiMeet branded */
+  --background: oklch(0.039 0.024 264.052); /* Near black with purple tint */
+  --foreground: oklch(0.925 0.013 264.052); /* Light purple-white */
+  --card: oklch(0.103 0.036 264.052); /* Deep purple-black surface */
+  --card-foreground: oklch(0.925 0.013 264.052);
+  --popover: oklch(0.103 0.036 264.052);
+  --popover-foreground: oklch(0.925 0.013 264.052);
+  --primary: oklch(0.545 0.15 264.052); /* Deep purple - mystery */
+  --primary-foreground: oklch(0.985 0.005 264.052);
+  --secondary: oklch(0.178 0.048 264.052); /* Subtle purple border */
+  --secondary-foreground: oklch(0.925 0.013 264.052);
+  --muted: oklch(0.178 0.048 264.052);
+  --muted-foreground: oklch(0.639 0.021 264.052); /* Muted gray */
+  --accent: oklch(0.645 0.243 264.376); /* Electric blue - trust */
+  --accent-foreground: oklch(0.985 0.005 264.052);
+  --destructive: oklch(0.696 0.205 25.331); /* Red for safety alerts */
+  --border: oklch(0.178 0.048 264.052);
+  --input: oklch(0.125 0.040 264.052);
+  --ring: oklch(0.545 0.15 264.052);
+  
+  /* ProxiMeet specific colors */
+  --success: oklch(0.615 0.151 164.035); /* Emerald for safety/consent */
+  --warning: oklch(0.794 0.151 85.595); /* Amber for caution */
+  --available: oklch(0.694 0.164 142.495); /* Green for available now */
+  
+  --sidebar: oklch(0.103 0.036 264.052);
+  --sidebar-foreground: oklch(0.925 0.013 264.052);
+  --sidebar-primary: oklch(0.545 0.15 264.052);
+  --sidebar-primary-foreground: oklch(0.985 0.005 264.052);
+  --sidebar-accent: oklch(0.178 0.048 264.052);
+  --sidebar-accent-foreground: oklch(0.925 0.013 264.052);
+  --sidebar-border: oklch(0.178 0.048 264.052);
+  --sidebar-ring: oklch(0.545 0.15 264.052);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ProxiMeet Custom Classes */
+@layer utilities {
+  .bg-dark-bg {
+    background-color: var(--background);
+  }
+  .bg-dark-surface {
+    background-color: var(--card);
+  }
+  .border-dark-border {
+    border-color: var(--border);
+  }
+  .text-dark-text {
+    color: var(--foreground);
+  }
+  .text-dark-muted {
+    color: var(--muted-foreground);
+  }
+  .bg-primary-purple {
+    background-color: var(--primary);
+  }
+  .text-primary-purple {
+    color: var(--primary);
+  }
+  .bg-primary-blue {
+    background-color: var(--accent);
+  }
+  .text-primary-blue {
+    color: var(--accent);
+  }
+  .bg-success {
+    background-color: var(--success);
+  }
+  .text-success {
+    color: var(--success);
+  }
+  .bg-warning {
+    background-color: var(--warning);
+  }
+  .text-warning {
+    color: var(--warning);
+  }
+  .bg-danger {
+    background-color: var(--destructive);
+  }
+  .text-danger {
+    color: var(--destructive);
+  }
+  .bg-available {
+    background-color: var(--available);
+  }
+  .text-available {
+    color: var(--available);
+  }
 }
