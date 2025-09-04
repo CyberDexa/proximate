@@ -4,9 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "prisma generate && next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma db push --force-reset",
+    "deploy:setup": "./scripts/deploy.sh",
+    "vercel:build": "prisma generate && next build",
+    "supabase:types": "npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/lib/supabase/database.types.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
@@ -20,6 +27,9 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@stripe/stripe-js": "^7.9.0",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.57.0",
     "@tanstack/react-query": "^5.86.0",
     "@types/jszip": "^3.4.1",
     "@types/nodemailer": "^7.0.1",
