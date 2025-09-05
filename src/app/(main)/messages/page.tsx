@@ -37,69 +37,24 @@ export default function MessagesPage() {
   }, []);
 
   const loadMatches = async () => {
-    // TODO: Implement API call
-    const mockMatches: Match[] = [
-      {
-        id: 'match-1',
-        partner: {
-          id: 'user-1',
-          name: 'Alex',
-          image: '/placeholder-avatar.jpg',
-          isVerified: true
-        },
-        lastMessage: {
-          content: 'Looking forward to meeting tonight! 😊',
-          timestamp: new Date(Date.now() - 10 * 60 * 1000),
-          senderId: 'user-1'
-        },
-        unreadCount: 2,
-        matchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        consentConfirmed: true,
-        videoVerified: true,
-        hasActiveMeetup: true
-      },
-      {
-        id: 'match-2',
-        partner: {
-          id: 'user-2',
-          name: 'Sam',
-          image: '/placeholder-avatar.jpg',
-          isVerified: false
-        },
-        lastMessage: {
-          content: 'Hey! Thanks for the match',
-          timestamp: new Date(Date.now() - 45 * 60 * 1000),
-          senderId: 'current-user-id'
-        },
-        unreadCount: 0,
-        matchedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-        consentConfirmed: false,
-        videoVerified: false,
-        hasActiveMeetup: false
-      },
-      {
-        id: 'match-3',
-        partner: {
-          id: 'user-3',
-          name: 'Riley',
-          image: '/placeholder-avatar.jpg',
-          isVerified: true
-        },
-        lastMessage: {
-          content: 'Coffee sounds great!',
-          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          senderId: 'user-3'
-        },
-        unreadCount: 1,
-        matchedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        consentConfirmed: true,
-        videoVerified: false,
-        hasActiveMeetup: false
-      }
-    ];
+    try {
+      setLoading(true);
+      const response = await fetch('/api/messages');
+      const data = await response.json();
 
-    setMatches(mockMatches);
-    setLoading(false);
+      if (data.success) {
+        setMatches(data.matches);
+      } else {
+        console.error('Failed to load matches:', data.error);
+        // Fall back to empty array if no matches
+        setMatches([]);
+      }
+    } catch (error) {
+      console.error('Error loading matches:', error);
+      setMatches([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatTimeAgo = (date: Date) => {

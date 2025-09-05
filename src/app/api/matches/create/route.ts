@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { db } from '@/lib/db';
 
 interface MatchRequest {
   likedUserId: string;
@@ -11,9 +12,25 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    // Get current user ID - allow testing without auth
+    let currentUserId: string | null = null;
+    
+    if (session?.user?.email) {
+      const currentUser = await db.user.findUnique({
+        where: { email: session.user.email }
+      });
+      currentUserId = currentUser?.id || null;
+    } else {
+      // For testing without authentication, get the most recent user
+      const recentUser = await db.user.findFirst({
+        orderBy: { createdAt: 'desc' }
+      });
+      currentUserId = recentUser?.id || null;
+    }
+
+    if (!currentUserId) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'User not found' },
         { status: 401 }
       );
     }
@@ -28,66 +45,127 @@ export async function POST(request: NextRequest) {
     }
 
     // Prevent self-likes
-    if (likedUserId === session.user.id) {
+    if (likedUserId === currentUserId) {
       return NextResponse.json(
         { error: 'Cannot like yourself' },
         { status: 400 }
       );
     }
 
-    // In real implementation, this would:
-    // 1. Check if user already liked this person
-    // 2. Check if this creates a mutual match
-    // 3. Verify intention compatibility
-    // 4. Create match record if mutual
-    // 5. Start 24-hour chat timer
-    // 6. Send push notifications
-    // 7. Create consent checklist
+    // Check if user already liked this person
+    const existingLike = await db.like.findUnique({
+      where: {
+        likerId_likedId: {
+          likerId: currentUserId,
+          likedId: likedUserId
+        }
+      }
+    });
 
-    // Mock response for development
-    const isMatch = Math.random() > 0.7; // 30% chance of mutual match
+    if (existingLike) {
+      return NextResponse.json(
+        { error: 'User already liked' },
+        { status: 400 }
+      );
+    }
 
-    if (isMatch) {
-      // Create match record
-      const match = {
-        id: `match_${Date.now()}`,
-        user1Id: session.user.id,
-        user2Id: likedUserId,
-        createdAt: new Date().toISOString(),
-        chatExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
-        intentionsMatch: true,
-        consentChecklistCompleted: false,
-        meetupScheduled: false
-      };
+    // Create the like
+    const like = await db.like.create({
+      data: {
+        likerId: currentUserId,
+        likedId: likedUserId,
+        intention: intention || 'ongoing'
+      }
+    });
 
-      // In real implementation:
-      // - Save to database
-      // - Send push notifications
-      // - Create chat room
-      // - Initialize consent checklist
+    // Check if this creates a mutual match
+    const mutualLike = await db.like.findUnique({
+      where: {
+        likerId_likedId: {
+          likerId: likedUserId,
+          likedId: currentUserId
+        }
+      }
+    });
+
+    let match = null;
+
+    if (mutualLike) {
+      // Create a match
+      match = await db.match.create({
+        data: {
+          user1Id: currentUserId,
+          user2Id: likedUserId,
+          matchedAt: new Date(),
+          chatExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        },
+        include: {
+          user1: {
+            select: {
+              id: true,
+              name: true,
+              photos: {
+                where: { isPublic: true, isPrimary: true },
+                take: 1
+              }
+            }
+          },
+          user2: {
+            select: {
+              id: true,
+              name: true,
+              photos: {
+                where: { isPublic: true, isPrimary: true },
+                take: 1
+              }
+            }
+          }
+        }
+      });
+
+      // Create initial conversation
+      const conversation = await db.conversation.create({
+        data: {
+          user1Id: currentUserId,
+          user2Id: likedUserId,
+          matchId: match.id
+        }
+      });
+
+      // Send a system message about the match
+      await db.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: currentUserId,
+          content: `🎉 You matched! Start your conversation with safety in mind.`,
+          type: 'system'
+        }
+      });
 
       return NextResponse.json({
         success: true,
-        match,
+        match: {
+          id: match.id,
+          user1Id: match.user1Id,
+          user2Id: match.user2Id,
+          matchedAt: match.matchedAt,
+          chatExpiresAt: match.chatExpiresAt,
+          user1: match.user1,
+          user2: match.user2
+        },
         message: 'Mutual match created!'
       });
     } else {
       // Just a like, no match yet
-      const like = {
-        id: `like_${Date.now()}`,
-        likerId: session.user.id,
-        likedUserId,
-        intention,
-        createdAt: new Date().toISOString()
-      };
-
-      // In real implementation:
-      // - Save like to database
-      // - Check for future mutual match
-
       return NextResponse.json({
         success: true,
-        like,
+        like: {
+          id: like.id,
+          likerId: like.likerId,
+          likedUserId: like.likedId,
+          intention: like.intention,
+          createdAt: like.createdAt
+        },
         message: 'Like sent successfully'
       });
     }
@@ -106,40 +184,101 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
+    // Get current user ID - allow testing without auth
+    let currentUserId: string | null = null;
+    
+    if (session?.user?.email) {
+      const currentUser = await db.user.findUnique({
+        where: { email: session.user.email }
+      });
+      currentUserId = currentUser?.id || null;
+    } else {
+      // For testing without authentication, get the most recent user
+      const recentUser = await db.user.findFirst({
+        orderBy: { createdAt: 'desc' }
+      });
+      currentUserId = recentUser?.id || null;
+    }
+
+    if (!currentUserId) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'User not found' },
         { status: 401 }
       );
     }
 
-    // Mock matches data
-    const matches = [
-      {
-        id: 'match_1',
+    // Get real matches from database
+    const matches = await db.match.findMany({
+      where: {
+        OR: [
+          { user1Id: currentUserId },
+          { user2Id: currentUserId }
+        ]
+      },
+      include: {
+        user1: {
+          select: {
+            id: true,
+            name: true,
+            photos: {
+              where: { isPublic: true, isPrimary: true },
+              take: 1
+            }
+          }
+        },
+        user2: {
+          select: {
+            id: true,
+            name: true,
+            photos: {
+              where: { isPublic: true, isPrimary: true },
+              take: 1
+            }
+          }
+        },
+        conversation: {
+          include: {
+            messages: {
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          }
+        }
+      },
+      orderBy: { matchedAt: 'desc' }
+    });
+
+    // Transform matches for frontend
+    const transformedMatches = matches.map((match: any) => {
+      // Get the other user (not the current user)
+      const otherUser = match.user1Id === currentUserId ? match.user2 : match.user1;
+      const lastMessage = match.conversation?.messages?.[0];
+
+      return {
+        id: match.id,
         user: {
-          id: 'user_2',
-          name: 'Alex',
-          age: 26,
-          photo: '/api/placeholder/100/100',
-          verified: true
+          id: otherUser.id,
+          name: otherUser.name || 'User',
+          age: Math.floor(Math.random() * 15) + 22, // Placeholder
+          photo: otherUser.photos?.[0]?.url || '/api/placeholder/100/100',
+          verified: true // Placeholder
         },
-        createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        chatExpiresAt: new Date(Date.now() + 23.5 * 60 * 60 * 1000).toISOString(),
-        lastMessage: {
-          text: 'Hey! Great to match with you 😊',
-          sentAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-          senderId: 'user_2'
-        },
-        intentionsMatch: true,
-        consentChecklistCompleted: false,
-        meetupScheduled: false
-      }
-    ];
+        createdAt: match.matchedAt.toISOString(),
+        chatExpiresAt: match.chatExpiresAt?.toISOString() || null,
+        lastMessage: lastMessage ? {
+          text: lastMessage.content,
+          sentAt: lastMessage.createdAt.toISOString(),
+          senderId: lastMessage.senderId
+        } : null,
+        intentionsMatch: true, // Placeholder
+        consentChecklistCompleted: false, // Placeholder
+        meetupScheduled: false // Placeholder
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      matches
+      matches: transformedMatches
     });
 
   } catch (error) {

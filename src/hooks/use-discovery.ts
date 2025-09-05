@@ -31,135 +31,70 @@ export function useDiscovery(options: UseDiscoveryOptions = {}) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  // Mock data for development
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      name: 'Alex',
-      age: 26,
-      distance: 0.8,
-      blurredPhoto: '/api/placeholder/100/100',
-      intentions: ['tonight', 'ongoing'],
-      verified: true,
-      availableNow: true,
-      mutualInterests: 3,
-      lastActive: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      safetyScore: 9.2
-    },
-    {
-      id: '2',
-      name: 'Sam',
-      age: 24,
-      distance: 1.2,
-      blurredPhoto: '/api/placeholder/100/100',
-      intentions: ['this week'],
-      verified: true,
-      availableNow: false,
-      mutualInterests: 5,
-      lastActive: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      safetyScore: 8.7
-    },
-    {
-      id: '3',
-      name: 'Jordan',
-      age: 29,
-      distance: 2.1,
-      blurredPhoto: '/api/placeholder/100/100',
-      intentions: ['ongoing'],
-      verified: false,
-      availableNow: true,
-      mutualInterests: 2,
-      lastActive: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-      safetyScore: 7.8
-    },
-    {
-      id: '4',
-      name: 'Casey',
-      age: 31,
-      distance: 0.5,
-      blurredPhoto: '/api/placeholder/100/100',
-      intentions: ['tonight'],
-      verified: true,
-      availableNow: true,
-      mutualInterests: 4,
-      lastActive: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
-      safetyScore: 9.5
-    },
-    {
-      id: '5',
-      name: 'Riley',
-      age: 27,
-      distance: 3.2,
-      blurredPhoto: '/api/placeholder/100/100',
-      intentions: ['this week', 'ongoing'],
-      verified: true,
-      availableNow: false,
-      mutualInterests: 1,
-      lastActive: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-      safetyScore: 8.9
-    }
-  ];
-
-  const activeUsersNearby = mockUsers.filter(user => 
-    user.availableNow && user.distance <= 1
-  ).length;
+  const [activeUsersNearby, setActiveUsersNearby] = useState(0);
 
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Simulate API call with shorter delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      let filteredUsers = [...mockUsers];
-
-      // Apply instant mode filter
-      if (options.instantMode) {
-        filteredUsers = filteredUsers.filter(user => 
-          user.availableNow && user.distance <= 1
-        );
-      }
-
-      // Apply distance filter
-      if (options.maxDistance) {
-        filteredUsers = filteredUsers.filter(user => 
-          user.distance <= options.maxDistance!
-        );
-      }
-
-      // Apply age filters
-      if (options.minAge) {
-        filteredUsers = filteredUsers.filter(user => user.age >= options.minAge!);
-      }
-      if (options.maxAge) {
-        filteredUsers = filteredUsers.filter(user => user.age <= options.maxAge!);
-      }
-
-      // Apply intention filters
-      if (options.intentions && options.intentions.length > 0) {
-        filteredUsers = filteredUsers.filter(user =>
-          user.intentions.some(intention => 
-            options.intentions!.includes(intention)
-          )
-        );
-      }
-
-      // Sort by safety score and verification status
-      filteredUsers.sort((a, b) => {
-        if (a.verified && !b.verified) return -1;
-        if (!a.verified && b.verified) return 1;
-        return b.safetyScore - a.safetyScore;
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '10'
       });
 
-      setUsers(filteredUsers);
-      setHasMore(false); // For mock data
+      if (options.instantMode) {
+        params.append('instantMode', 'true');
+      }
+      if (options.maxDistance) {
+        params.append('maxDistance', options.maxDistance.toString());
+      }
+      if (options.minAge) {
+        params.append('minAge', options.minAge.toString());
+      }
+      if (options.maxAge) {
+        params.append('maxAge', options.maxAge.toString());
+      }
+      if (options.intentions && options.intentions.length > 0) {
+        params.append('intentions', options.intentions.join(','));
+      }
+
+      // Fetch real users from API
+      const response = await fetch(`/api/discover?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // For page 1, replace users; for subsequent pages, append
+        if (page === 1) {
+          setUsers(data.users);
+        } else {
+          setUsers(prev => [...prev, ...data.users]);
+        }
+        
+        setActiveUsersNearby(data.activeUsersNearby);
+        setHasMore(data.pagination.hasMore);
+      } else {
+        throw new Error(data.error || 'Failed to fetch users');
+      }
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
+      console.error('Discovery fetch error:', err);
+      
+      // Fallback: show empty state instead of crash
+      setUsers([]);
+      setActiveUsersNearby(0);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, [options]);
+  }, [options, page]);
 
   useEffect(() => {
     fetchUsers();
@@ -215,8 +150,13 @@ export function useDiscovery(options: UseDiscoveryOptions = {}) {
     if (!hasMore || loading) return;
     
     setPage(prev => prev + 1);
-    // In real implementation, fetch next page
   }, [hasMore, loading]);
+
+  // Reset page when options change
+  useEffect(() => {
+    setPage(1);
+    setUsers([]);
+  }, [options.instantMode, options.maxDistance, options.minAge, options.maxAge, JSON.stringify(options.intentions)]);
 
   return {
     users,
