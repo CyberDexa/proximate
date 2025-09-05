@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -23,11 +23,33 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
+
+  // Fetch unread message count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await fetch('/api/messages/unread-count');
+        if (response.ok) {
+          const { count } = await response.json();
+          setUnreadCount(count);
+        }
+      } catch (error) {
+        console.error('Failed to fetch unread count:', error);
+      }
+    };
+
+    fetchUnreadCount();
+    
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const navigationItems = [
     { href: '/discover', icon: Compass, label: 'Discover', badge: null },
-    { href: '/messages', icon: MessageCircle, label: 'Messages', badge: '3' },
+    { href: '/messages', icon: MessageCircle, label: 'Messages', badge: unreadCount > 0 ? unreadCount.toString() : null },
     { href: '/premium', icon: Crown, label: 'Premium', badge: null },
     { href: '/safety-center', icon: Shield, label: 'Safety', badge: null },
     { href: '/profile-setup', icon: User, label: 'Profile', badge: null },
