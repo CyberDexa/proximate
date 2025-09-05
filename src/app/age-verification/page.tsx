@@ -46,8 +46,8 @@ export default function AgeVerificationPage() {
         timestamp: new Date().toISOString()
       });
 
-      // Redirect to profile setup for new users
-      router.push('/profile-setup');
+      // Redirect to mandatory ID verification
+      router.push('/id-verification');
       
     } catch (error) {
       setErrors(['Invalid date format. Please use MM/DD/YYYY']);
