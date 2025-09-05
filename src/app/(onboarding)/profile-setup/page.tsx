@@ -148,8 +148,8 @@ export default function ProfileSetup() {
 
       if (response.ok) {
         console.log('Profile created successfully!');
-        // Redirect to main app
-        window.location.href = '/discover';
+        // Redirect to profile page to show saved information
+        window.location.href = '/profile';
       } else {
         setSubmitError(result.error || 'Failed to create profile');
         console.error('Failed to create profile:', result);

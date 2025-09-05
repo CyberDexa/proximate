@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { db } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,111 +46,143 @@ export async function POST(request: NextRequest) {
       hasSession: !!session
     });
 
-    // In production, you would:
-    // 1. Get user ID from session
-    // 2. Create/update user profile in database
-    // 3. Store photos securely
-    // 4. Create safety profile
-    // 5. Set up intentions with expiry
-
-    /* Example Prisma operations:
+    // For development/testing, create a user if session is not available
+    let userId: string;
     
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    });
+    if (session?.user?.email) {
+      // Get or create user from session
+      let user = await db.user.findUnique({
+        where: { email: session.user.email }
+      });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      if (!user) {
+        user = await db.user.create({
+          data: {
+            email: session.user.email,
+            name: session.user.name || 'User',
+            isAgeVerified: true // Coming from profile setup means age is verified
+          }
+        });
+      }
+      userId = user.id;
+    } else {
+      // For testing without authentication, create a temporary user
+      const tempEmail = `user_${Date.now()}@temp.proximeet.com`;
+      const user = await db.user.create({
+        data: {
+          email: tempEmail,
+          name: 'Test User',
+          isAgeVerified: true
+        }
+      });
+      userId = user.id;
     }
 
-    // Create profile
-    await prisma.profile.upsert({
-      where: { userId: user.id },
+    // Create/update profile
+    await db.profile.upsert({
+      where: { userId },
       update: {
         lookingFor: intentions,
-        interestedIn,
-        kinks,
-        boundaries,
-        dealBreakers,
-        discreetMode: blurUntilMatch,
-        // ... other fields
+        interestedIn: interestedIn || [],
+        kinks: kinks || [],
+        boundaries: boundaries || [],
+        dealBreakers: dealBreakers || [],
+        discreetMode: !!blurUntilMatch,
+        preferredMeetupTime: preferredMeetupTime || [],
+        availability: availability || []
       },
       create: {
-        userId: user.id,
+        userId,
         lookingFor: intentions,
-        interestedIn,
-        kinks,
-        boundaries,
-        dealBreakers,
-        discreetMode: blurUntilMatch,
-        // ... other fields
+        interestedIn: interestedIn || [],
+        kinks: kinks || [],
+        boundaries: boundaries || [],
+        dealBreakers: dealBreakers || [],
+        discreetMode: !!blurUntilMatch,
+        preferredMeetupTime: preferredMeetupTime || [],
+        availability: availability || []
       }
     });
 
-    // Create intentions
+    // Create intentions with expiry
+    // First, clear existing intentions for this user
+    await db.intention.deleteMany({
+      where: { userId }
+    });
+
     for (const intention of intentions) {
       const expiresAt = intention === 'tonight' 
         ? new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
         : null;
 
-      await prisma.intention.create({
+      await db.intention.create({
         data: {
-          userId: user.id,
+          userId,
           type: intention,
           expiresAt
         }
       });
     }
 
-    // Create safety profile
-    await prisma.safetyProfile.upsert({
-      where: { userId: user.id },
+    // Create/update safety profile
+    await db.safetyProfile.upsert({
+      where: { userId },
       update: {
         emergencyContacts: trustedContact ? [{ name: 'Trusted Contact', phone: trustedContact }] : [],
-        safeWord,
-        // ... other safety fields
+        safeWord: safeWord || '',
+        consentPreferences: consentPreferences || []
       },
       create: {
-        userId: user.id,
+        userId,
         emergencyContacts: trustedContact ? [{ name: 'Trusted Contact', phone: trustedContact }] : [],
-        safeWord,
-        // ... other safety fields
+        safeWord: safeWord || '',
+        consentPreferences: consentPreferences || []
       }
     });
 
-    // Store photos
-    for (let i = 0; i < photos.length; i++) {
-      await prisma.photo.create({
-        data: {
-          userId: user.id,
-          url: photos[i],
-          isPrimary: i === 0,
-          isPublic: true,
-          isVerified: false
-        }
+    // Store photos if provided
+    if (photos && photos.length > 0) {
+      // Clear existing photos first
+      await db.photo.deleteMany({
+        where: { userId, isPublic: true }
       });
+
+      for (let i = 0; i < photos.length; i++) {
+        await db.photo.create({
+          data: {
+            userId,
+            url: photos[i],
+            isPrimary: i === 0,
+            isPublic: true,
+            isVerified: false
+          }
+        });
+      }
     }
 
-    // Store private photos
-    for (const privatePhoto of privatePhotos || []) {
-      await prisma.photo.create({
-        data: {
-          userId: user.id,
-          url: privatePhoto,
-          isPrimary: false,
-          isPublic: false,
-          isVerified: false
-        }
+    // Store private photos if provided
+    if (privatePhotos && privatePhotos.length > 0) {
+      // Clear existing private photos first
+      await db.photo.deleteMany({
+        where: { userId, isPublic: false }
       });
+
+      for (const privatePhoto of privatePhotos) {
+        await db.photo.create({
+          data: {
+            userId,
+            url: privatePhoto,
+            isPrimary: false,
+            isPublic: false,
+            isVerified: false
+          }
+        });
+      }
     }
-
-    */
-
-    // For now, simulate successful profile creation
     return NextResponse.json({
       success: true,
       message: 'Profile created successfully',
-      profileId: 'temp-profile-id'
+      userId: userId
     });
 
   } catch (error) {
