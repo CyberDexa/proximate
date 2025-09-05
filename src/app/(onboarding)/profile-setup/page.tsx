@@ -90,6 +90,8 @@ export default function ProfileSetup() {
     safeWord: '',
     consentPreferences: []
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const currentStepData = steps.find(step => step.id === currentStep);
   const CurrentStepComponent = currentStepData?.component;
@@ -100,6 +102,20 @@ export default function ProfileSetup() {
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
     } else {
+      // Validate basic requirements before submission
+      if (profileData.intentions.length === 0) {
+        setSubmitError('Please select at least one intention before completing your profile.');
+        return;
+      }
+      
+      console.log('Starting profile submission...');
+      console.log('Current profile data:', {
+        intentions: profileData.intentions,
+        interestedIn: profileData.interestedIn,
+        photos: profileData.photos?.length || 0,
+        hasBasicInfo: !!(profileData.intentions.length)
+      });
+      
       // Final submission
       handleSubmit();
     }
@@ -112,7 +128,12 @@ export default function ProfileSetup() {
   };
 
   const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    
     try {
+      console.log('Submitting profile data:', profileData);
+      
       // Submit profile data
       const response = await fetch('/api/profile/create', {
         method: 'POST',
@@ -122,14 +143,22 @@ export default function ProfileSetup() {
         body: JSON.stringify(profileData),
       });
 
+      const result = await response.json();
+      console.log('Server response:', result);
+
       if (response.ok) {
+        console.log('Profile created successfully!');
         // Redirect to main app
         window.location.href = '/discover';
       } else {
-        console.error('Failed to create profile');
+        setSubmitError(result.error || 'Failed to create profile');
+        console.error('Failed to create profile:', result);
       }
     } catch (error) {
       console.error('Error submitting profile:', error);
+      setSubmitError('Network error. Please check your connection and try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -241,13 +270,42 @@ export default function ProfileSetup() {
             
             <Button
               onClick={handleNext}
-              className="bg-purple-600 hover:bg-purple-700 flex items-center space-x-2"
+              disabled={isSubmitting}
+              className="bg-purple-600 hover:bg-purple-700 flex items-center space-x-2 disabled:opacity-50"
             >
-              <span>{currentStep === steps.length ? 'Complete Profile' : 'Next'}</span>
-              {currentStep < steps.length && <ArrowRight className="w-4 h-4" />}
+              <span>
+                {isSubmitting 
+                  ? 'Saving...' 
+                  : currentStep === steps.length 
+                    ? 'Complete Profile' 
+                    : 'Next'
+                }
+              </span>
+              {currentStep < steps.length && !isSubmitting && <ArrowRight className="w-4 h-4" />}
             </Button>
           </div>
         </div>
+
+        {/* Error Display */}
+        {submitError && (
+          <div className="mt-4 p-4 bg-red-900/20 border border-red-800 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="w-5 h-5 text-red-400 mt-0.5">⚠️</div>
+              <div>
+                <h3 className="font-semibold text-red-300">Error</h3>
+                <p className="text-sm text-red-400 mt-1">{submitError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSubmitError(null)}
+                  className="mt-2 border-red-600 text-red-400 hover:bg-red-900/20"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Safety Notice */}
         <div className="mt-8 p-4 bg-purple-900/20 border border-purple-800 rounded-lg">
