@@ -100,7 +100,8 @@ export default function AgeVerificationPage() {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBirthDate(e.target.value)}
                   className="pl-10"
                   placeholder="MM/DD/YYYY"
-                  max={new Date().toISOString().split('T')[0]}
+                  min={new Date(new Date().getFullYear() - 100, 0, 1).toISOString().split('T')[0]}
+                  max={new Date(new Date().getFullYear() - 18, new Date().getMonth(), new Date().getDate()).toISOString().split('T')[0]}
                   required
                 />
               </div>
