@@ -230,13 +230,23 @@ export default function ProfileSetup() {
             <span>Previous</span>
           </Button>
 
-          <Button
-            onClick={handleNext}
-            className="bg-purple-600 hover:bg-purple-700 flex items-center space-x-2"
-          >
-            <span>{currentStep === steps.length ? 'Complete Profile' : 'Next'}</span>
-            {currentStep < steps.length && <ArrowRight className="w-4 h-4" />}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => window.location.href = '/discover'}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Skip for now
+            </Button>
+            
+            <Button
+              onClick={handleNext}
+              className="bg-purple-600 hover:bg-purple-700 flex items-center space-x-2"
+            >
+              <span>{currentStep === steps.length ? 'Complete Profile' : 'Next'}</span>
+              {currentStep < steps.length && <ArrowRight className="w-4 h-4" />}
+            </Button>
+          </div>
         </div>
 
         {/* Safety Notice */}

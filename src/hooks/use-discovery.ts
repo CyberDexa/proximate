@@ -109,8 +109,8 @@ export function useDiscovery(options: UseDiscoveryOptions = {}) {
       setLoading(true);
       setError(null);
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Simulate API call with shorter delay
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       let filteredUsers = [...mockUsers];
 

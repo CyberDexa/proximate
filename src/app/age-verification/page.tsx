@@ -46,8 +46,8 @@ export default function AgeVerificationPage() {
         timestamp: new Date().toISOString()
       });
 
-      // Redirect to consent education
-      router.push('/consent-education');
+      // Redirect to profile setup for new users
+      router.push('/profile-setup');
       
     } catch (error) {
       setErrors(['Invalid date format. Please use MM/DD/YYYY']);
